@@ -13,14 +13,8 @@ public class ConcertService {
     private final ConcertRepository concertRepository;
 
     @Transactional
-    public void reserse(Long concertId) {
+    public void reserve(Long concertId) {
         Concert concert = concertRepository.findById(concertId).orElseThrow();
-
-        try {
-            Thread.sleep(50);
-        } catch (InterruptedException e) {
-            throw new RuntimeException(e);
-        }
         
         concert.decreaseSeat();
     }

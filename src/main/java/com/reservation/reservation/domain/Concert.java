@@ -21,7 +21,7 @@ public class Concert {
 
     public void decreaseSeat() {
         if (remainingSeats <= 0) {
-            throw new IllegalStateException("좌석 부족");
+            throw new NoSeatException();
         }
         remainingSeats--;
     }
