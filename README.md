@@ -44,6 +44,14 @@ Optional<Concert> findByIdForUpdate(@Param("id") Long id);
 - 인위적 지연(1000ms) 추가 시 대기 현상 명확히 확인
 - 처리량 감소 확인
 
+## 3단계 - 낙관적 락 적용
+- @Version 기반 충돌 감지
+- ObjectOptimisticLockingFailureException 발생
+- 재시도 전략 적용
+- 재시도 횟수 초과 시 실패 처리
+- H2 환경 특성상 충돌 재현 한계 존재
+
+=> 실제 MySQL/PostgreSQL 환경에서는 충돌 빈도가 증가하며, 인메모리 DB에서는 충돌 재현이 제한적임을 확인함.
 ## ⚖ 트레이드오프 분석
 | 항목     | 기본 트랜잭션 | 비관적 락  |
 | ------ | ------- | ------ |
@@ -53,8 +61,6 @@ Optional<Concert> findByIdForUpdate(@Param("id") Long id);
 | 병목 가능성 | 낮음      | 높음     |
 
 ## 다음 단계 계획
-- 낙관적 락 적용
-- 재시도 전략 구현
 - 보상 트랜잭션 설계
 
 ## 핵심 
