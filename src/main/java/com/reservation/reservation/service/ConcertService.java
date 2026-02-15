@@ -14,8 +14,14 @@ public class ConcertService {
 
     @Transactional
     public void reserve(Long concertId) {
-        Concert concert = concertRepository.findById(concertId).orElseThrow();
+        Concert concert = concertRepository.findByIdForUpdate(concertId).orElseThrow();
         
+        try {
+            Thread.sleep(1000);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+
         concert.decreaseSeat();
     }
 }

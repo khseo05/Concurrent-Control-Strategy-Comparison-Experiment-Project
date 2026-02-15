@@ -45,7 +45,7 @@ class ConcertServiceConcurrencyTest {
         for (int i = 0; i < threadCount; i++) {
             executorService.submit(() ->  {
                 try {
-                    concertService.reserse(concertId);
+                    concertService.reserve(concertId);
                 } catch (Exception ignored) {
                 } finally {
                     latch.countDown();
