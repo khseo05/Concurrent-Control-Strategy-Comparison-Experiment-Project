@@ -30,7 +30,7 @@ class ConcertServiceConcurrencyTest {
 
     @BeforeEach
     void setUp() {
-        Concert concert = new Concert(1); // 좌석 1개
+        Concert concert = new Concert(10); // 좌석 10개
         concertRepository.save(concert);
         concertId = concert.getId();
     }
@@ -40,23 +40,28 @@ class ConcertServiceConcurrencyTest {
 
         int threadCount = 100;
         ExecutorService executorService = Executors.newFixedThreadPool(threadCount);
-        CountDownLatch latch = new CountDownLatch(threadCount);
+        CountDownLatch readyLatch = new CountDownLatch(threadCount);
+        CountDownLatch startLatch = new CountDownLatch(1);
+        CountDownLatch doneLatch = new CountDownLatch(threadCount);
 
         for (int i = 0; i < threadCount; i++) {
             executorService.submit(() ->  {
                 try {
-                    concertService.reserve(concertId);
-                } catch (Exception ignored) {
+                    readyLatch.countDown();
+                    startLatch.await();
+                    concertService.reserve(concertId); 
                 } finally {
-                    latch.countDown();
+                    doneLatch.countDown();
                 }
             }); 
         }
 
-        latch.await();
+        readyLatch.await();
+        startLatch.countDown();
+        doneLatch.await();
 
         Concert concert = concertRepository.findById(concertId).orElseThrow();
         System.out.println("남은 좌석: " + concert.getRemainingSeats());
-        assertTrue(concert.getRemainingSeats() < 0);
+        assertTrue(concert.getRemainingSeats() >= 0);
     }
 }
