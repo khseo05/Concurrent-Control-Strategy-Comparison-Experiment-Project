@@ -30,5 +30,14 @@ public class ConcertService {
             }
         }
         throw new IllegalStateException("충돌 과다 발생");
+        Concert concert = concertRepository.findByIdForUpdate(concertId).orElseThrow();
+        
+        try {
+            Thread.sleep(1000);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+
+        concert.decreaseSeat();
     }
 }
