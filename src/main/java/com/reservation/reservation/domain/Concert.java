@@ -28,4 +28,8 @@ public class Concert {
         }
         remainingSeats--;
     }
+
+    public void increaseSeat() {
+        remainingSeats++;
+    }
 }
