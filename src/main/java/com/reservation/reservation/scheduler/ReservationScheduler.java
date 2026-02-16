@@ -29,11 +29,9 @@ public class ReservationScheduler {
 
         for (Reservation r : expired) {
 
-            if (r.expireIfNecessary()) {
-                Concert concert = concertRepository.findById(r.getConcertId()).orElseThrow();
+            Concert concert = concertRepository.findById(r.getConcertId()).orElseThrow();
 
-                concert.increaseSeat();
-            }
+            concert.increaseSeat();
         }
     }
 }

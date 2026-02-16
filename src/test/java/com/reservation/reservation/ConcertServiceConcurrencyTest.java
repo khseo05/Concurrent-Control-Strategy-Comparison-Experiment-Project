@@ -50,6 +50,8 @@ class ConcertServiceConcurrencyTest {
                     readyLatch.countDown();
                     startLatch.await();
                     concertService.reserve(concertId); 
+                } catch(InterruptedException e) {
+                    throw new RuntimeException(e);
                 } finally {
                     doneLatch.countDown();
                 }

@@ -24,12 +24,21 @@ public class Reservation {
     private LocalDateTime expiresAt;
 
     public boolean expireIfNecessary() {
-        if (status == ReservationStatus.PENDING && expiresAt != null && expiresAt.isBefore(LocalDateTime.now())) {
-            this.status = ReservationStatus.CANCELLED;
+        if (this.status != ReservationStatus.PENDING) {
+            return false;
+        }
+
+        if (expiresAt != null && expiresAt.isBefore(LocalDateTime.now())) {
+            this.status = ReservationStatus.EXPIRED;
             return true;
         }
         return false;
     }
+
+    public void forceExpireNow() {
+        this.expiresAt = LocalDateTime.now().minusMinutes(1);
+    }
+
 
     public Reservation(Long concertId) {
         this.concertId = concertId;
@@ -38,11 +47,19 @@ public class Reservation {
         this.expiresAt = LocalDateTime.now().plusMinutes(5);
     }
 
-    public void confirm() {
+    public boolean confirm() {
+        if (this.status != ReservationStatus.PENDING) {
+            return false;
+        }
         this.status = ReservationStatus.CONFIRMED;
+        return true;
     }
 
-    public void cancel() {
+    public boolean cancel() {
+        if (this.status != ReservationStatus.PENDING) {
+            return false;
+        }
         this.status = ReservationStatus.CANCELLED;
+        return true;
     }
 }
