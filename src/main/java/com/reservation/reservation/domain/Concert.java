@@ -13,6 +13,9 @@ public class Concert {
     @GeneratedValue( strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Version
+    private Long version;
+    
     private int remainingSeats;
 
     public Concert(int remainingSeats) {
@@ -24,5 +27,9 @@ public class Concert {
             throw new NoSeatException();
         }
         remainingSeats--;
+    }
+
+    public void increaseSeat() {
+        remainingSeats++;
     }
 }
