@@ -1,6 +1,6 @@
-package com.reservation.reservation.controller;
+package com.reservation.reservation.controller.experiment;
 
-import com.reservation.reservation.service.ConcertService;
+import com.reservation.reservation.service.ReservationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
@@ -9,11 +9,11 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/concerts")
 public class ConcertController {
 
-    private final ConcertService concertService;
+    private final ReservationService reservationService;
 
     @PostMapping("/{id}/reserve")
     public String reserve(@PathVariable Long id) {
-        concertService.reserve(id);
+        reservationService.reserve(id);
         return "예약 성공";
     }
 }
