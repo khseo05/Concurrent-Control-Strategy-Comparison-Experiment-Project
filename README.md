@@ -44,6 +44,9 @@
 - 단순 @Transactional은 동시성 문제를 해결하지 못함
 - 비관적 락은 안전하지만 성능 저하 가능성 존재
 - 낙관적 락은 충돌 기반 재시도 전략이 필수
+#### 추가 기술적 관찰
+- Default isolation level: READ_COMMITTED
+- Optimisitc lock conflict is detected during flush/commit phase (JPA version check)
 
 #### 자세한 실험 로그 및 분석은 블로그에 정리 예정
 
