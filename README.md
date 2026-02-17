@@ -105,11 +105,6 @@ http://localhost:8080/h2-console
 - Persistence: Spring Data JPA, H2 (In-memory)
 - Test: JUnit5, Mockito, AssertJ
 
-## 향후 확장
-- 분산 환경 대응
-- 로그 수집 / 관측 시스템 적용
-- 메트릭 기반 락 전략 성능 비교
-
 ## 프로젝트 의도
 이 프로젝트는 다음 질문들에 대한 답을 찾는 과정이었습니다.
 - "동시성은 왜 깨지는가?"
