@@ -48,7 +48,9 @@
 - Default isolation level: READ_COMMITTED
 - Optimisitc lock conflict is detected during flush/commit phase (JPA version check)
 
-#### 자세한 실험 로그 및 분석은 블로그에 정리 예정
+#### 실험 과정과 정량 분석은 아래 블로그에 정리했습니다.
+=> [Velog.io] [동시성 예약 시스템에서 오버셀링을 막는 방법](https://velog.io/@kang07/%EB%8F%99%EC%8B%9C%EC%84%B1-%EC%98%88%EC%95%BD-%EC%8B%9C%EC%8A%A4%ED%85%9C%EC%97%90%EC%84%9C-%EB%B3%B4%EC%84%9C%EC%85%80%EB%A7%81%EC%9D%84-%EB%A7%89%EB%8A%94%EB%B0%A9%EB%B2%95)
+
 
 ## Phase 2 - 결제 흐름 + 트랜잭션 경계 분리
 동시성 제어 이후, 실제 예약 시스템 구조로 확장
