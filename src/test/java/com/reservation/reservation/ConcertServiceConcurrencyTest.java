@@ -2,7 +2,7 @@ package com.reservation.reservation;
 
 import com.reservation.reservation.domain.Concert;
 import com.reservation.reservation.repository.ConcertRepository;
-import com.reservation.reservation.service.ConcertService;
+import com.reservation.reservation.service.experiment.ConcertService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;

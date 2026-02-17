@@ -8,8 +8,8 @@ import org.springframework.web.bind.annotation.*;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
-    @ExceptionHandler(NoSeatException.class) 
+    @ExceptionHandler(IllegalStateException.class) 
     public ResponseEntity<String> handleNoseat(NoSeatException e) {
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+        return ResponseEntity.status(HttpStatus.CONFLICT).body("좌석 부족");
     }
 }
