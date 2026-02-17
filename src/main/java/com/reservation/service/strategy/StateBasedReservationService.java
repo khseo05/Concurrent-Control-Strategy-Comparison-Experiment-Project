@@ -1,13 +1,19 @@
-package com.reservation.reservation.service;
+package com.reservation.service.strategy;
 
-import com.reservation.reservation.domain.Reservation;
-import com.reservation.reservation.payment.*;
-import lombok.RequiredArgsConstructor;
+import com.reservation.payment.TemporaryPaymentException;
+import com.reservation.payment.PermanentPaymentException;
+import com.reservation.domain.Reservation;
+import com.reservation.payment.PaymentService;
+import com.reservation.service.ReservationTxService;
+import com.reservation.observability.ExecutionContext;
+import com.reservation.observability.ExecutionContextHolder;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
+import lombok.RequiredArgsConstructor;
 
 @Service
 @RequiredArgsConstructor
-public class ReservationService {
+public class StateBasedReservationService implements ReservationStrategy {
 
     private final ReservationTxService txService;
     private final PaymentService paymentService;

@@ -1,7 +1,7 @@
-package com.reservation.reservation.repository;
+package com.reservation.repository;
 
-import com.reservation.reservation.domain.Reservation;
-import com.reservation.reservation.domain.ReservationStatus;
+import com.reservation.domain.Reservation;
+import com.reservation.domain.ReservationStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.time.LocalDateTime;

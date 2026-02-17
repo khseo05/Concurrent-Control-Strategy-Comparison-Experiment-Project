@@ -1,4 +1,4 @@
-package com.reservation.reservation.payment;
+package com.reservation.payment;
 
 import org.springframework.stereotype.Service;
 
