@@ -1,62 +1,76 @@
-# Concurrency-Driven Reservation System
-"동시성 사고를 재현하고, 설계로 해결한다."
+# Concert Reservation System
+동시성 환경에서 좌석 초과 예약을 방지하기 위한
+트랜잭션 분리 기반 예약 시스템 구현 프로젝트
 
-1. 프로젝트 목적
-실무 환경에서 예약 시스템은 다음과 같은 문제를 가진다.
-- 동시에 여러 사용자가 같은 좌석을 예약
-- 트랜잭션이 있어도 데이터 적합성이 깨질 수 있음
+## 1. 프로젝트 목적
+공연 티켓팅과 같은 환경에서는 여러 사용자가 동시에 예약을 시도합니다.
 
-이 프로젝트는 단순 CRUD가 아니라, 동시성 이슈를 의도적으로 재현하고, 설계적 해결을 비교 분석하는 것을 목표로 한다.
+이 프로젝트는 다음 문제를 해결하는 것을 목표로 합니다:
+- 좌석 수 초과 예약 방지
+- 결제 실패 시 좌석 복구 보장
+- 만료된 예약 정리
+- 결제 중 만료와 확정이 동시에 발생하는 경쟁 상황 처리
 
-## 1단계 - 기본 트랜잭션 (동시성 붕괴)
-#### 실험 조건
-- 좌석 수: 1
-- 동시 요청: 100개
-- 단순 트랜잭션 환경
-
-#### 결과
-- 좌석이 음수로 감소
-- Lost Update 발생
-- 정합성 붕괴 확인
-
-#### 원인 분석
-- 기본 트랜잭션은 원자성은 보장하지만 동시에 동일 row를 읽는 것을 막지 못함
-- READ_COMMITTED 환경에서 충돌 발생
-
-## 2단계 - 비관적 락 적용
-#### 적용 방식
-Repository에 PESSIMISTIC_WRITE 적용
+## 2. 아키텍처
 ```
-@Lock(LockModeType.PESSIMISTIC_WRITE)
-@Query("select c from Concert c where c.id = :id")
-Optional<Concert> findByIdForUpdate(@Param("id") Long id);
+Controller
+   ↓
+ReservationService (비즈니스 로직 + 재시도)
+   ↓
+ReservationTxService (@Transactional 분리)
+   ↓
+Repository (JPA)
 ```
-=> Service에서 해당 메서드 사용
+### 설계 핵심
+- 트랜잭션 로직과 비즈니스 로직을 분리
+- 결제 API는 ``` PaymentService ```로 분리
+- 상태 기반 도메인 모델 적용
 
-#### 실혐 결과
-- 예약 성공: 1건
-- 나머지 요청: "좌석 부족"
-- 좌석 음수 발생 없음
-- 정합성 완전 유지
+### 3. 예약 흐름
+1. 좌석 차감 + 예약 생성 (PENDING)
+2. 결제 시도 (재시도 최대 3회)
+3. 성공 -> CONFIRMED
+4. 실패 -> CANCELLED + 좌석 복구
+5. 만료 시 -> EXPIRED + 좌석 복구
 
-#### 성능 관찰
-- 동시 요청이 순차 처리됨
-- 인위적 지연(1000ms) 추가 시 대기 현상 명확히 확인
-- 처리량 감소 확인
+## 4. 상태 모델
+```
+PENDING → CONFIRMED
+PENDING → CANCELLED
+PENDING → EXPIRED
+```
+- 상태 변경은 도메인 객체 내부에서만 가능
+- CANCEL / EXPIRE 시 좌석 복구 보장
 
-## 3단계 - 낙관적 락 적용
-- @Version 기반 충돌 감지
-- ObjectOptimisticLockingFailureException 발생
-- 재시도 전략 적용
-- 재시도 횟수 초과 시 실패 처리
-- H2 환경 특성상 충돌 재현 한계 존재
+## 5. 동시성 테스트
+### 1. 단위 테스트
+- 예약 성공 시 좌석 감소 검증
+- 결제 실패 시 좌석 복구 검증
+- 만료/확정 경쟁 상황 테스트
 
-=> 실제 MySQL/PostgreSQL 환경에서는 충돌 빈도가 증가하며, 인메모리 DB에서는 충돌 재현이 제한적임을 확인함.
+### 2. 실제 부하 테스트
+```
+for i in {1..100}; do curl -X POST http://localhost:8080/concerts/1/reserve & done
+```
+- 초과 예약 발생 없음
+- 좌석 음수 상태 없음
+- 결제 실패 시 복구 정상 동작
 
-## 다음 단계 계획
-- 보상 트랜잭션 설계
+## 기술 스택
+- JAVA 17
+- Spring Boot
+- Spring Data JPA
+- H2 (In-Memory)
+- JUnit5
+- Mockito
 
-## 핵심 
-- 트랜잭션 != 동시성 완전 해결
-- 동시성은 설계의 문제
-- 도메인에 불변 규칙이 필요
+## 프로젝트에서 얻은 것
+- 트랜잭션 경계 설계 경험
+- 동시성 경쟁 상황 테스트 설계
+- 도메인 주도 상태 모델링
+- 서비스 분리를 통한 책임 명확화
+
+## 향후 확장
+- 분산 환경 대응
+- 로그 수집 / 관측 시스템 적용
+- 실제 DB 기반 성능 비교
