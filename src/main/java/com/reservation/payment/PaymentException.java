@@ -1,4 +1,4 @@
-package com.reservation.reservation.payment;
+package com.reservation.payment;
 
 public class PaymentException extends RuntimeException {
     public PaymentException(String message) {

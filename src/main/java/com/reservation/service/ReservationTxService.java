@@ -1,8 +1,8 @@
-package com.reservation.reservation.service;
+package com.reservation.service;
 
-import com.reservation.reservation.domain.*;
-import com.reservation.reservation.repository.*;
-import com.reservation.reservation.service.*;
+import com.reservation.observability.MeasureTx;
+import com.reservation.domain.*;
+import com.reservation.repository.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -15,6 +15,7 @@ public class ReservationTxService {
     private final ReservationRepository reservationRepository;
 
     @Transactional
+    @MeasureTx
     public Reservation createReservaton(Long concertId) {
         Concert concert = concertRepository.findById(concertId).orElseThrow();
         concert.decreaseSeat();

@@ -1,6 +1,6 @@
-package com.reservation.reservation.repository;
+package com.reservation.repository;
 
-import com.reservation.reservation.domain.Concert;
+import com.reservation.domain.Concert;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;

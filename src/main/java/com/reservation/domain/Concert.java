@@ -1,4 +1,4 @@
-package com.reservation.reservation.domain;
+package com.reservation.domain;
 
 import jakarta.persistence.*;
 import lombok.Getter;
