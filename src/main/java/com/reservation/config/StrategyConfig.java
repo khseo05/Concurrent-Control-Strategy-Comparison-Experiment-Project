@@ -19,8 +19,8 @@ public class StrategyConfig {
             //OptimisticReservationService optimisticService
             //PessimisticReservationService pessimisticService
     ) {
+        return stateService;
         //return optimisticService;
         //return pessimisticService;
-        return stateService;
     }
 }

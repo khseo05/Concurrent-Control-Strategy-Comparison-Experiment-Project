@@ -5,6 +5,8 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.List;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.io.FileWriter;
+import java.io.IOException;
 
 @Component
 public class MetricsCollector {
@@ -52,23 +54,41 @@ public class MetricsCollector {
         } while (!maxWriteTime.compareAndSet(prev, writeTime));
     }
 
-    public void printSummary() {
+    public static class Summary {
+        public long avg;
+        public long max;
+        public long p95;
+        public long p99;
+        public double avgRetry;
+        public long totalConflict;
+    }
+
+    public Summary getSummary() {
         long requests = totalRequests.get();
 
-        System.out.println("총 요청: " + requests);
+        Summary summary = new Summary();
 
-        if (requests == 0) return;
+        if (requests == 0) return summary;
 
-        long p95 = calculatePercentile(0.95);
-        long p99 = calculatePercentile(0.99);
+        summary.avg = totalWriteTime.get() / requests;
+        summary.max = maxWriteTime.get();
+        summary.p95 = calculatePercentile(0.95);
+        summary.p99 = calculatePercentile(0.99);
+        summary.avgRetry = (double) totalRetry.get() / requests;
+        summary.totalConflict = totalConflict.get();
 
-        System.out.println("평균 write 시간(ns): " + totalWriteTime.get() / requests);
-        System.out.println("최대 write 시간(ns): " + maxWriteTime.get());
-        System.out.println("평균 retry: " + (double) totalRetry.get() / requests);
-        System.out.println("충돌 횟수: " + totalConflict.get());
-        System.out.println("차단 횟수: " + totalBlocked.get());
-        System.out.println("P95 write 시간(ns): " + p95);
-        System.out.println("P99 write 시간(ns): " + p99);
+        return summary;
+    }
+
+    public void printSummary() {
+        Summary s = getSummary();
+
+        System.out.println("평균 write 시간(ns): " + s.avg);
+        System.out.println("최대 write 시간(ns): " + s.max);
+        System.out.println("평균 retry: " + s.avgRetry);
+        System.out.println("충돌 횟수: " + s.totalConflict);
+        System.out.println("P95 write 시간(ns): " + s.p95);
+        System.out.println("P99 write 시간(ns): " + s.p99);
     }
 
     private long calculatePercentile(double percentile) {
@@ -86,5 +106,26 @@ public class MetricsCollector {
         index = Math.max(0, Math.min(index, copy.size() -1));
 
         return copy.get(index);
+    }
+
+    public void exportCsv(String fileName, String strategy, int threadCount) {
+
+        Summary s = getSummary();
+
+        try (FileWriter writer = new FileWriter(fileName, true)) {
+            writer.write(String.format(
+                "%s,%d,%d,%d,%d,%d,%.2f,%d\n",
+                strategy,
+                threadCount,
+                s.avg,
+                s.p95,
+                s.p99,
+                s.max,
+                s.avgRetry,
+                s.totalConflict
+            ));
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
     }
 }

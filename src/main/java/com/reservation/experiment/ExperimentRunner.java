@@ -12,6 +12,8 @@ import org.springframework.boot.CommandLineRunner;
 import org.springframework.stereotype.Component;
 
 import java.util.concurrent.*;
+import java.io.FileWriter;
+import java.io.IOException;
 
 @Component
 @RequiredArgsConstructor
@@ -71,6 +73,7 @@ public class ExperimentRunner implements CommandLineRunner {
         executor.shutdown();
 
         metricsCollector.printSummary();
+        metricsCollector.exportCsv("metrics.csv", "stateService", threadCount);
 
         System.out.println("=== 실험 종료 ===");
     }
