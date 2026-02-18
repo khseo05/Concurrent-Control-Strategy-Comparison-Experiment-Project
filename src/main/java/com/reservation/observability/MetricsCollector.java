@@ -55,7 +55,7 @@ public class MetricsCollector {
 
         System.out.println("평균 write 시간(ns): " + totalWriteTime.get() / requests);
         System.out.println("최대 write 시간(ns): " + maxWriteTime.get());
-        System.out.println("평균 retry: " + totalRetry.get() / requests);
+        System.out.println("평균 retry: " + (double) totalRetry.get() / requests);
         System.out.println("충돌 횟수: " + totalConflict.get());
         System.out.println("차단 횟수: " + totalBlocked.get());
     }

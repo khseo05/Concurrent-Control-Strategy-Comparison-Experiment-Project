@@ -17,7 +17,7 @@ public class OptimisticReservationService implements ReservationStrategy {
     @Override
     public void reserve(Long concertId) {
 
-        int maxRetry = 10;
+        int maxRetry = 50;
         int attempt = 0;
 
         while (attempt < maxRetry) {
@@ -25,7 +25,6 @@ public class OptimisticReservationService implements ReservationStrategy {
                 txService.createReservaton(concertId);
                 return;
             } catch (ObjectOptimisticLockingFailureException e) {
-
                 ExecutionContext context = ExecutionContextHolder.get();
                 if (context != null) {
                     context.increaseRetry();

@@ -18,6 +18,11 @@ public class ReservationTxService {
     @MeasureTx
     public Reservation createReservaton(Long concertId) {
         Concert concert = concertRepository.findById(concertId).orElseThrow();
+
+        try {
+            Thread.sleep(100);
+        } catch (InterruptedException ignored) {}
+
         concert.decreaseSeat();
 
         Reservation reservation = new Reservation(concertId);

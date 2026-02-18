@@ -22,7 +22,7 @@ public class StateBasedReservationService implements ReservationStrategy {
 
         Reservation reservation = txService.createReservaton(concertId);
 
-        int maxRetry = 3;
+        int maxRetry = 50;
         int attempt = 0;
         
         while (attempt < maxRetry) {
