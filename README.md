@@ -2,8 +2,7 @@
 ***Concert Reservation System***
 
 상세 설계 과정 및 실험 분석은 블로그에서 확인할 수 있습니다.
-- https://velog.io/@kang07/%EB%8F%99%EC%8B%9C%EC%84%B1-%EC%BB%A8%ED%8A%B8%EB%A1%A4-%EC%A0%84%EB%9E%B5-%EB%B9%84%EA%B5%90-%EC%8B%A4%ED%97%98
-
+- [동시성_제어_전략_비교_실험_세부내용](https://velog.io/@kang07/%EB%8F%99%EC%8B%9C%EC%84%B1-%EC%BB%A8%ED%8A%B8%EB%A1%A4-%EC%A0%84%EB%9E%B5-%EB%B9%84%EA%B5%90-%EC%8B%A4%ED%97%98)
 ## 문제 정의
 동시성 환경에서 좌석 예약 시스템은 오버셀링 문제가 발생할 수 있다.
 단순한 락 비교가 아니라,
