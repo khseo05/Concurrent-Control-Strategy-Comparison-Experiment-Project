@@ -1,121 +1,100 @@
-# Concert Reservation System
-동시성 제어와 트랜잭션 경계를 실험한 좌석 예약 시스템
+# 동시성 제어 전략 비교 실험 프로젝트
+***Concert Reservation System***
 
-## 프로젝트 개요
-이 프로젝트는 동시성 환경에서 좌석 오버셀링을 방지하는 예약 시스템을 구현하고,
-락 전략별 동작 차이와 트랜잭션 경계를 직접 실험하기 위해 개발되었습니다.
+상세 설계 과정 및 실험 분석은 블로그에서 확인할 수 있습니다.
+=> 
 
-단순 CRUD가 아니라,
-- 동시 요청 100개 이상 환경
-- 오버셀링 재현
-- 락 전략 비교
-- 결제 실패/재시도 흐름 분리
-- 상태 기반 좌석 복구 처리
-까지 포함합니다.
+## 문제 정의
+동시성 환경에서 좌석 예약 시스템은 오버셀링 문제가 발생할 수 있다.
+단순한 락 비교가 아니라,
+- 충돌 강도에 따라 어떤 전략이 더 적합한가?
+를 시험으로 검증하는 것이 프로젝트의 목표이다.
 
-## Branch Strategy - 실험 기반 설계 과정
-이 프로젝트는 동시성 해결 전략을 비교하기 위해 각 해결 방안을 독립적인 브랜치로 관리합니다.
-| Branch                          | 설명                              |
-| ------------------------------- | ------------------------------- |
-| `no-lock-version`               | 동시성 제어 없음 (오버셀링 재현)             |
-| `optimistic-lock`               | `@Version` 기반 낙관적 락 적용          |
-| `pessimistic-lock`              | `SELECT FOR UPDATE` 기반 비관적 락 적용 |
-| `main` / `feature/payment-flow` | 트랜잭션 분리 + 결제 흐름까지 포함된 최종 구조     |
+## 실험 목표
+- Optimistic vs Pessimistic vs State-Based 비교
+- 평균이 아닌 ***P95 / P99 중심 분석***
+- Retry 누적 비용을 실제 비용으로 간주
+- 설계 변경이 락 전략보다 효과적인지 검증
 
-브랜치 간 diff를 통해 각 전략 차이를 직접 확인 할 수 있습니다.
+## 실험 환경
+- remainingSeats = 1000
+- sleep = 100ms
+- threadCount = 50 / 100 / 200
+- maxRetry = 50
+- 측정 지표: avg / P95 / P99 / retry / conflict
 
-## Phase 1 - 동시성 제어 실험 (Lock 비교)
-### 목표
-의도적으로 오버셀링을 발생시키고, 락 전략별 차이를 비교
+## 전략 요약
+### Optimistic Lock
+- @Version 기반
+- 충돌 허용 후 retry
+- Low contention에 유리
 
-### 실험 환경
-- 100 concurrnet requests
-- ExecutorService + CountDownLatch
-- H2 In-Memory DB
+### Pessimistic Lock
+- SELECT FOR UPDATE
+- 직렬화 기반 처리
+- Tail 안정적
 
-### 결과 비교
-| 전략                                 | 정합성        | 특징             |
-| ---------------------------------- | ---------- | -------------- |
-| No Lock (@Transactional only)      | ❌ 좌석 음수 발생 | 오버셀링 재현 성공     |
-| Pessimistic Lock                   | ✅ 정합성 유지   | DB 락으로 직렬화     |
-| Optimistic Lock (@Version + retry) | ✅ 정합성 유지   | 충돌 발생 + 재시도 필요 |
+### State-Based 설계
+- PENDING -> PAID -> CANCELLED
+- 좌석 감소와 결제 흐름 분리
+- 충돌 구간 구조적 축소
 
-### 관찰
-- 단순 @Transactional은 동시성 문제를 해결하지 못함
-- 비관적 락은 안전하지만 성능 저하 가능성 존재
-- 낙관적 락은 충돌 기반 재시도 전략이 필수
-#### 추가 기술적 관찰
-- Default isolation level: READ_COMMITTED
-- Optimisitc lock conflict is detected during flush/commit phase (JPA version check)
+## 실험 결과
+### 평균 Latency
+<img width="640" height="480" alt="avg_ms" src="https://github.com/user-attachments/assets/7cd297df-9ec7-40a1-88e8-a82da9ad4723" />
 
-#### 실험 과정과 정량 분석은 아래 블로그에 정리했습니다.
-=> [Velog.io] [동시성 예약 시스템에서 오버셀링을 막는 방법](https://velog.io/@kang07/%EB%8F%99%EC%8B%9C%EC%84%B1-%EC%98%88%EC%95%BD-%EC%8B%9C%EC%8A%A4%ED%85%9C%EC%97%90%EC%84%9C-%EB%B3%B4%EC%84%9C%EC%85%80%EB%A7%81%EC%9D%84-%EB%A7%89%EB%8A%94%EB%B0%A9%EB%B2%95)
+### P95 Latency
+<img width="640" height="480" alt="p95_ms" src="https://github.com/user-attachments/assets/d1a81bd7-3dac-44b0-8e60-5106b1a61ff0" />
 
+### P99 Latency
+<img width="640" height="480" alt="p99_ms" src="https://github.com/user-attachments/assets/66689170-2266-4766-8565-9bde817975c4" />
 
-## Phase 2 - 결제 흐름 + 트랜잭션 경계 분리
-동시성 제어 이후, 실제 예약 시스템 구조로 확장
+### 200 Threads 기준 P99 비교
+<img width="640" height="480" alt="p99_200_comparison" src="https://github.com/user-attachments/assets/39f13c12-1aaf-448a-9e4c-e4abf191759e" />
 
-### 구조 분리
-#### - ReservationService
-   - 결제 재시도 로직
-   - 흐름 제어
-#### - ReservatonTxService
-   - 좌석 감소
-   - 예약 상태 변경
-   - 트랜잭션 경계 관리
-#### - PaymentService
-   - 결제 성공 / 일시 실패 / 영구 실패 시뮬레이션
+## 핵심
+1. 평균 latency는 안정성을 설명하지 못한다.
+2. High Contention 환경에서 Optimistic은 ***Tail Amplification*** 발생
+3. P95/P99가 전략 선택의 핵심 지표
+4. 설계 변경(State-Based)이 락 전략 변경보다 더 큰 효과를 보였다.
 
-## 설계 포인트
-- 외부 API(결제) 호출은 트랜잭션 밖에서 수행
-- 상태 기반 좌석 복구 (CANCELLED / EXPIRED)
-- 재시도 초과 시 자동 취소
-- 멱등성 고려 (중복 취소 방지)
-
-## 실제 동시 요청 테스트
+## 구조
 ```
-for i in {1..100}; do curl -X POST http://localhost:8080/concerts/1/reserve & done
-```
-#### 결과
-- 좌석 수 초과 예약 없음
-- 음수 좌석 발생 없음
-- 일부 요청은 "좌석 부족" 응답
-- 정합성 유지 확인
-
-## 아키텍처 구조
-```
-Controller
+ExperimentRunner
    ↓
-ReservationService (비즈니스 로직 + 재시도)
+ReservationStrategy
    ↓
-ReservationTxService (@Transactional 분리)
+ReservationTxService
    ↓
 Repository (JPA)
 ```
-## 실행 방법
+관측 계층:
 ```
-./gradlew clean build
-./gradlew bootRun
-```
-H2 Console:
-```
-http://localhost:8080/h2-console
+ExecutionContext (ThreadLocal)
+   ↓
+MetricsCollector
+   ↓
+P95 / P99 계산
 ```
 
-## 기술 스택
-- Language/Framework: Java 17, Spring Boot 3.x
-- Persistence: Spring Data JPA, H2 (In-memory)
-- Test: JUnit5, Mockito, AssertJ
+## 설계 개선 과정
+초기에는 단순 락 전략 비교(Phase1)에서 시작하였다.
+그러나 낙관적 락은 충돌을 처리할 뿐, 충돌 구간 자체는 유지된다는 한계를 확인하였다.
 
-## 프로젝트 의도
-이 프로젝트는 다음 질문들에 대한 답을 찾는 과정이었습니다.
-- "동시성은 왜 깨지는가?"
-- "어떤 상황에서 어떤 락을 선택해야 하는가?"
-- "외부 API 호출이 포함된 트랜잭션은 어떻게 관리해야 하는가?"
+이에 트랜잭션 경계를 분리하고,
+예약 상태 전이(State-Based 설계)를 도입하여
+충돌 구간을 구조적으로 축소하는 방식으로 개선하였다.
 
-## 요약
-- 오버셀링 재현
-- 락 전략 비교
-- 결제 재시도 구조 설계
-- 상태 기반 좌석 복구
-- 동시 요청 100건 검증
+마지막으로 ExecutionContext 기반 관측 시스템을 구축하여
+P95/P99 중심으로 전략을 정량 비교하였다.
+
+## 결론
+동시성 전략은 "어떤 락이 더 좋은가"의 문제가 아니다.
+* 충돌 강도 기반으로 전략을 선택해야 한다.
+
+- Low Contention -> Optimistic
+- High Contention -> Pessimistic or State-Based
+- 가능하다면 -> 충돌 구간을 구조적으로 줄이는 설계가 최적
+
+
+
