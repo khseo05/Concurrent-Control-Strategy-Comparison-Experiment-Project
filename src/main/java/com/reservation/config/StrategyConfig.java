@@ -16,11 +16,11 @@ public class StrategyConfig {
     @Primary
     public ReservationStrategy reservationStrategy(
             StateBasedReservationService stateService
-            // OptimisticReservationService optimisticService
-            // PessimisticReservationService pessimisticService
+            //OptimisticReservationService optimisticService
+            //PessimisticReservationService pessimisticService
     ) {
-        // return optimisticService;
-        // return pessimisticService;
+        //return optimisticService;
+        //return pessimisticService;
         return stateService;
     }
 }
