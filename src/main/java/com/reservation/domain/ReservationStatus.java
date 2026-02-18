@@ -1,4 +1,4 @@
-package com.reservation.reservation.domain;
+package com.reservation.domain;
 
 public enum ReservationStatus {
     PENDING, CONFIRMED, CANCELLED, EXPIRED
