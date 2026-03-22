@@ -1,5 +1,7 @@
 package com.reservation.service.strategy;
 
+import com.reservation.domain.Reservation;
+
 public interface ReservationStrategy {
-    void reserve(Long concertId);
+    Reservation createPending(Long concertId);
 }

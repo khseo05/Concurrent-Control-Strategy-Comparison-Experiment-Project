@@ -3,6 +3,8 @@ package com.reservation.service.strategy;
 import com.reservation.service.ReservationTxService;
 import com.reservation.observability.ExecutionContext;
 import com.reservation.observability.ExecutionContextHolder;
+import com.reservation.domain.Concert;
+import com.reservation.domain.Reservation;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import lombok.RequiredArgsConstructor;
@@ -15,26 +17,34 @@ public class OptimisticReservationService implements ReservationStrategy {
     private final ReservationTxService txService;
 
     @Override
-    public void reserve(Long concertId) {
+    public Reservation createPending(Long concertId) {
+        ExecutionContext context = ExecutionContextHolder.get();
 
-        int maxRetry = 50;
+        int maxRetry = 5;
         int attempt = 0;
 
         while (attempt < maxRetry) {
             try {
-                txService.createReservaton(concertId);
-                return;
+                return txService.createPending(concertId);
             } catch (ObjectOptimisticLockingFailureException e) {
-                ExecutionContext context = ExecutionContextHolder.get();
+                attempt++;
+
                 if (context != null) {
-                    context.increaseRetry();
                     context.increaseConflict();
+                    context.increaseRetry();
                 }
 
-                attempt++;
+                sleep(30);
             }
         }
 
-        throw new IllegalStateException("충돌 과다 발생");
+        throw new ObjectOptimisticLockingFailureException(Concert.class, concertId);
+    }
+
+    private void sleep(long millis) {
+        try {
+            Thread.sleep(millis);
+        } catch (InterruptedException ignored) {
+        }
     }
 }

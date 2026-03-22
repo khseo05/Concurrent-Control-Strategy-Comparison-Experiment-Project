@@ -15,12 +15,12 @@ public class StrategyConfig {
     @Bean
     @Primary
     public ReservationStrategy reservationStrategy(
-            StateBasedReservationService stateService
+            //StateBasedReservationService stateService
             //OptimisticReservationService optimisticService
-            //PessimisticReservationService pessimisticService
+            PessimisticReservationService pessimisticService
     ) {
-        return stateService;
+        //return stateService;
         //return optimisticService;
-        //return pessimisticService;
+        return pessimisticService;
     }
 }

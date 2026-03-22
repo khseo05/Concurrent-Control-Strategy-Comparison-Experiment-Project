@@ -1,26 +1,22 @@
 package com.reservation.experiment;
 
-import com.reservation.observability.ExecutionContext;
-import com.reservation.observability.ExecutionContextHolder;
 import com.reservation.observability.MetricsCollector;
-import com.reservation.service.strategy.ReservationStrategy;
 import com.reservation.domain.Concert;
 import com.reservation.repository.ConcertRepository;
+import com.reservation.service.ReservationService;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.stereotype.Component;
 
 import java.util.concurrent.*;
-import java.io.FileWriter;
-import java.io.IOException;
 
 @Component
 @RequiredArgsConstructor
 public class ExperimentRunner implements CommandLineRunner {
 
     private final ConcertRepository concertRepository;
-    private final ReservationStrategy strategy;
+    private final ReservationService reservationService;
     private final MetricsCollector metricsCollector;
 
     @Override
@@ -35,6 +31,9 @@ public class ExperimentRunner implements CommandLineRunner {
         Long concertId = concert.getId();
         int threadCount = 200;
 
+        String resultType = "TIMEOUT";
+        int delayMs = 100;
+
         ExecutorService executor = Executors.newFixedThreadPool(threadCount);
 
         CountDownLatch readyLatch = new CountDownLatch(threadCount);
@@ -48,16 +47,7 @@ public class ExperimentRunner implements CommandLineRunner {
                     readyLatch.countDown();
                     startLatch.await();
 
-                    ExecutionContext context = new ExecutionContext();
-                    ExecutionContextHolder.set(context);
-
-                    try {
-                        strategy.reserve(concertId);
-                    } catch (Exception ignored) {
-                    } finally {
-                        metricsCollector.record(context);
-                        ExecutionContextHolder.clear();
-                    }
+                    reservationService.reserve(concertId, resultType, delayMs);
 
                 } catch (InterruptedException ignored) {
                 } finally {
