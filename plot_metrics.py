@@ -1,30 +1,151 @@
 import pandas as pd
 import matplotlib.pyplot as plt
+import matplotlib.ticker as ticker
+import os
 
-# CSV 읽기
 df = pd.read_csv("metrics.csv")
 
 # ns → ms 변환
-df["avg_ms"] = df["avg_ms"] / 1_000_000
-df["p95_ms"] = df["p95_ms"] / 1_000_000
-df["p99_ms"] = df["p99_ms"] / 1_000_000
+for col in ["avg_ns", "p95_ns", "p99_ns", "max_ns"]:
+    df[col.replace("_ns", "_ms")] = df[col] / 1_000_000
 
-strategies = df["strategy"].unique()
+STRATEGIES   = ["optimistic", "pessimistic", "stateBased"]
+SCENARIOS    = ["success", "fail", "timeout", "success+idempotency"]
+THREAD_COUNTS = [50, 100, 200]
+COLORS       = {"optimistic": "#e74c3c", "pessimistic": "#3498db", "stateBased": "#2ecc71"}
+MARKERS      = {"optimistic": "o", "pessimistic": "s", "stateBased": "^"}
 
-metrics = ["avg_ms", "p95_ms", "p99_ms"]
+os.makedirs("charts", exist_ok=True)
 
-for metric in metrics:
-    plt.figure()
+# ── 1. 시나리오별 P99 latency ──────────────────────────────────────────────
+fig, axes = plt.subplots(2, 2, figsize=(14, 10))
+fig.suptitle("P99 Write Latency by Scenario (ms)", fontsize=15, fontweight="bold")
 
-    for s in strategies:
-        subset = df[df["strategy"] == s]
-        plt.plot(subset["threads"], subset[metric], marker="o", label=s)
+for idx, scenario in enumerate(SCENARIOS):
+    ax = axes[idx // 2][idx % 2]
+    sub = df[df["scenario"] == scenario]
 
-    plt.xlabel("Threads")
-    plt.ylabel("Latency (ms)")
-    plt.title(f"{metric} comparison")
-    plt.legend()
-    plt.grid(True)
-    plt.savefig(f"{metric}.png")
+    for s in STRATEGIES:
+        d = sub[sub["strategy"] == s].sort_values("threads")
+        ax.plot(d["threads"], d["p99_ms"],
+                marker=MARKERS[s], color=COLORS[s], label=s, linewidth=2)
 
-plt.show()
+    ax.set_title(f"[{scenario}]")
+    ax.set_xlabel("Threads")
+    ax.set_ylabel("P99 (ms)")
+    ax.set_xticks(THREAD_COUNTS)
+    ax.legend()
+    ax.grid(True, alpha=0.4)
+
+plt.tight_layout()
+plt.savefig("charts/p99_by_scenario.png", dpi=150)
+plt.close()
+
+# ── 2. 시나리오별 P95 latency ──────────────────────────────────────────────
+fig, axes = plt.subplots(2, 2, figsize=(14, 10))
+fig.suptitle("P95 Write Latency by Scenario (ms)", fontsize=15, fontweight="bold")
+
+for idx, scenario in enumerate(SCENARIOS):
+    ax = axes[idx // 2][idx % 2]
+    sub = df[df["scenario"] == scenario]
+
+    for s in STRATEGIES:
+        d = sub[sub["strategy"] == s].sort_values("threads")
+        ax.plot(d["threads"], d["p95_ms"],
+                marker=MARKERS[s], color=COLORS[s], label=s, linewidth=2)
+
+    ax.set_title(f"[{scenario}]")
+    ax.set_xlabel("Threads")
+    ax.set_ylabel("P95 (ms)")
+    ax.set_xticks(THREAD_COUNTS)
+    ax.legend()
+    ax.grid(True, alpha=0.4)
+
+plt.tight_layout()
+plt.savefig("charts/p95_by_scenario.png", dpi=150)
+plt.close()
+
+# ── 3. TPS 비교 (success 시나리오) ────────────────────────────────────────
+fig, ax = plt.subplots(figsize=(9, 6))
+sub = df[df["scenario"] == "success"]
+
+for s in STRATEGIES:
+    d = sub[sub["strategy"] == s].sort_values("threads")
+    ax.plot(d["threads"], d["tps"],
+            marker=MARKERS[s], color=COLORS[s], label=s, linewidth=2)
+
+ax.set_title("TPS Comparison — success scenario", fontsize=13, fontweight="bold")
+ax.set_xlabel("Threads")
+ax.set_ylabel("TPS (req/s)")
+ax.set_xticks(THREAD_COUNTS)
+ax.legend()
+ax.grid(True, alpha=0.4)
+plt.tight_layout()
+plt.savefig("charts/tps_success.png", dpi=150)
+plt.close()
+
+# ── 4. 에러율 비교 (시나리오별 200 threads) ───────────────────────────────
+fig, ax = plt.subplots(figsize=(10, 6))
+sub = df[df["threads"] == 200]
+
+x = range(len(SCENARIOS))
+width = 0.25
+
+for i, s in enumerate(STRATEGIES):
+    d = sub[sub["strategy"] == s].set_index("scenario")
+    vals = [d.loc[sc, "error_rate"] if sc in d.index else 0 for sc in SCENARIOS]
+    offset = (i - 1) * width
+    ax.bar([xi + offset for xi in x], vals, width, label=s, color=COLORS[s], alpha=0.85)
+
+ax.set_title("Error Rate by Scenario — 200 threads (%)", fontsize=13, fontweight="bold")
+ax.set_ylabel("Error Rate (%)")
+ax.set_xticks(list(x))
+ax.set_xticklabels(SCENARIOS)
+ax.legend()
+ax.grid(True, axis="y", alpha=0.4)
+plt.tight_layout()
+plt.savefig("charts/error_rate_200threads.png", dpi=150)
+plt.close()
+
+# ── 5. 충돌 횟수 비교 (success 시나리오) ─────────────────────────────────
+fig, ax = plt.subplots(figsize=(9, 6))
+sub = df[df["scenario"] == "success"]
+
+for s in STRATEGIES:
+    d = sub[sub["strategy"] == s].sort_values("threads")
+    ax.plot(d["threads"], d["conflict"],
+            marker=MARKERS[s], color=COLORS[s], label=s, linewidth=2)
+
+ax.set_title("Conflict Count — success scenario", fontsize=13, fontweight="bold")
+ax.set_xlabel("Threads")
+ax.set_ylabel("Total Conflicts")
+ax.set_xticks(THREAD_COUNTS)
+ax.legend()
+ax.grid(True, alpha=0.4)
+plt.tight_layout()
+plt.savefig("charts/conflict_success.png", dpi=150)
+plt.close()
+
+# ── 6. 요약 테이블 출력 ───────────────────────────────────────────────────
+print("\n" + "=" * 70)
+print("SUMMARY TABLE — success scenario, P99 (ms) / TPS")
+print("=" * 70)
+sub = df[df["scenario"] == "success"]
+print(f"{'Strategy':<14} {'Threads':<10} {'P99 (ms)':>10} {'TPS':>10} {'Conflict':>10}")
+print("-" * 70)
+for s in STRATEGIES:
+    for t in THREAD_COUNTS:
+        row = sub[(sub["strategy"] == s) & (sub["threads"] == t)]
+        if not row.empty:
+            p99 = row["p99_ms"].values[0]
+            tps = row["tps"].values[0]
+            conf = int(row["conflict"].values[0])
+            print(f"{s:<14} {t:<10} {p99:>10.1f} {tps:>10.1f} {conf:>10}")
+print("=" * 70)
+
+print("\nCharts saved to ./charts/")
+print("  p99_by_scenario.png")
+print("  p95_by_scenario.png")
+print("  tps_success.png")
+print("  error_rate_200threads.png")
+print("  conflict_success.png")
