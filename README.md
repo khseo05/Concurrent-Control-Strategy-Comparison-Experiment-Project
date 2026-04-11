@@ -1,3 +1,4 @@
+
 # 동시성 제어 전략 비교 실험 프로젝트
 ***Concert Reservation System***
 
@@ -17,10 +18,17 @@
 
 ## 실험 환경
 - remainingSeats = 1000
-- sleep = 100ms
 - threadCount = 50 / 100 / 200
-- maxRetry = 50
-- 측정 지표: avg / P95 / P99 / retry / conflict
+- maxRetry = 5
+- 측정 지표: avg / P95 / P99 / TPS / 에러율 / retry / conflict / 상태 분포(SUCCESS·FAIL·TIMEOUT)
+
+## 실험 시나리오
+| 시나리오 | resultType | delayMs | 설명 |
+|----------|------------|---------|------|
+| success | SUCCESS | 100ms | 외부 호출 정상 응답 |
+| fail | FAIL | 100ms | 외부 호출 실패 |
+| timeout | TIMEOUT | 1500ms | read timeout 초과 |
+| success+idempotency | SUCCESS | 100ms | 중복 요청 포함 (requestId 풀 절반 크기) |
 
 ## 전략 요약
 ### Optimistic Lock
@@ -34,8 +42,8 @@
 - Tail 안정적
 
 ### State-Based 설계
-- PENDING -> PAID -> CANCELLED
-- 좌석 감소와 결제 흐름 분리
+- PENDING → CONFIRMED / CANCELLED / EXPIRED
+- 좌석 감소와 외부 결제 흐름 분리 (Tx1 → 외부 호출 → Tx2)
 - 충돌 구간 구조적 축소
 
 ## 실험 결과
@@ -59,13 +67,12 @@
 
 ## 구조
 ```
-ExperimentRunner
+ExperimentRunner (전략 × 시나리오 × 스레드 수 자동 루프)
    ↓
-ReservationStrategy
-   ↓
-ReservationTxService
-   ↓
-Repository (JPA)
+ReservationService
+   ├─ Tx1: ReservationStrategy (Optimistic / Pessimistic / State-Based)
+   ├─ 외부 호출: mock-gateway-server (SUCCESS / FAIL / TIMEOUT)
+   └─ Tx2: ReservationTxService.applyResult (상태 전이 + 좌석 복구)
 ```
 관측 계층:
 ```
@@ -73,7 +80,14 @@ ExecutionContext (ThreadLocal)
    ↓
 MetricsCollector
    ↓
-P95 / P99 계산
+avg / P95 / P99 / TPS / 에러율 / 상태 분포
+   ↓
+CSV 출력
+```
+idempotency:
+```
+IdempotencyStore (requestId 기반 중복 차단)
+   └─ success+idempotency 시나리오에서 검증
 ```
 
 ## 설계 개선 과정
@@ -86,11 +100,6 @@ P95 / P99 계산
 
 마지막으로 ExecutionContext 기반 관측 시스템을 구축하여
 P95/P99 중심으로 전략을 정량 비교하였다.
-
-## 향후 계획
-- mock-gateway MVP(지연/실패/타임아웃 + idempotency)
-- 관측 최소 세트(TPS/에러율/P95/P99 + 상태전이 로그)
-- 시나리오 3~5개 + 결과표
 
 ## 결론
 동시성 전략은 "어떤 락이 더 좋은가"의 문제가 아니다.
