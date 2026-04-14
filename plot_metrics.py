@@ -126,7 +126,53 @@ plt.tight_layout()
 plt.savefig("charts/conflict_success.png", dpi=150)
 plt.close()
 
-# ── 6. 요약 테이블 출력 ───────────────────────────────────────────────────
+# ── 6. TPS 비교 — 시나리오별 (200 threads) ───────────────────────────────
+fig, ax = plt.subplots(figsize=(10, 6))
+sub = df[df["threads"] == 200]
+
+x = range(len(SCENARIOS))
+width = 0.25
+
+for i, s in enumerate(STRATEGIES):
+    d = sub[sub["strategy"] == s].set_index("scenario")
+    vals = [d.loc[sc, "tps"] if sc in d.index else 0 for sc in SCENARIOS]
+    offset = (i - 1) * width
+    ax.bar([xi + offset for xi in x], vals, width, label=s, color=COLORS[s], alpha=0.85)
+
+ax.set_title("TPS by Scenario — 200 threads", fontsize=13, fontweight="bold")
+ax.set_ylabel("TPS (req/s)")
+ax.set_xticks(list(x))
+ax.set_xticklabels(SCENARIOS)
+ax.legend()
+ax.grid(True, axis="y", alpha=0.4)
+plt.tight_layout()
+plt.savefig("charts/tps_by_scenario.png", dpi=150)
+plt.close()
+
+# ── 7. success vs timeout TPS 직접 비교 ──────────────────────────────────
+fig, axes = plt.subplots(1, 3, figsize=(15, 5), sharey=False)
+fig.suptitle("TPS Drop: success vs timeout (Gateway Fault Impact)", fontsize=13, fontweight="bold")
+
+for idx, s in enumerate(STRATEGIES):
+    ax = axes[idx]
+    for scenario, linestyle in [("success", "-"), ("timeout", "--")]:
+        d = df[(df["strategy"] == s) & (df["scenario"] == scenario)].sort_values("threads")
+        ax.plot(d["threads"], d["tps"],
+                marker=MARKERS[s], color=COLORS[s],
+                linestyle=linestyle, linewidth=2,
+                label=scenario)
+    ax.set_title(s, fontweight="bold")
+    ax.set_xlabel("Threads")
+    ax.set_ylabel("TPS (req/s)")
+    ax.set_xticks(THREAD_COUNTS)
+    ax.legend()
+    ax.grid(True, alpha=0.4)
+
+plt.tight_layout()
+plt.savefig("charts/tps_success_vs_timeout.png", dpi=150)
+plt.close()
+
+# ── 8. 요약 테이블 출력 ───────────────────────────────────────────────────
 print("\n" + "=" * 70)
 print("SUMMARY TABLE — success scenario, P99 (ms) / TPS")
 print("=" * 70)
@@ -149,3 +195,5 @@ print("  p95_by_scenario.png")
 print("  tps_success.png")
 print("  error_rate_200threads.png")
 print("  conflict_success.png")
+print("  tps_by_scenario.png")
+print("  tps_success_vs_timeout.png")
