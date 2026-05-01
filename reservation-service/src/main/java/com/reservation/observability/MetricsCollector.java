@@ -17,7 +17,7 @@ public class MetricsCollector {
     private final AtomicLong totalRetry = new AtomicLong();
     private final AtomicLong totalConflict = new AtomicLong();
     private final AtomicLong totalBlocked = new AtomicLong();
-    private final AtomicLong totalIdempotencyHit = new AtomicLong();
+    private final AtomicLong totalDedupHit = new AtomicLong();
     private final AtomicLong totalSuccess = new AtomicLong();
     private final AtomicLong totalFail = new AtomicLong();
     private final AtomicLong totalTimeout = new AtomicLong();
@@ -31,7 +31,7 @@ public class MetricsCollector {
         totalRetry.set(0);
         totalConflict.set(0);
         totalBlocked.set(0);
-        totalIdempotencyHit.set(0);
+        totalDedupHit.set(0);
         totalSuccess.set(0);
         totalFail.set(0);
         totalTimeout.set(0);
@@ -39,8 +39,8 @@ public class MetricsCollector {
         writeTimes.clear();
     }
 
-    public void recordIdempotencyHit() {
-        totalIdempotencyHit.incrementAndGet();
+    public void recordDedupHit() {
+        totalDedupHit.incrementAndGet();
     }
 
     public void setExperimentDuration(long durationMs) {
@@ -61,8 +61,8 @@ public class MetricsCollector {
         totalBlocked.addAndGet(context.getBlockedCount());
 
         String status = context.getStatus();
-        if ("SUCCESS".equals(status))     totalSuccess.incrementAndGet();
-        else if ("FAIL".equals(status))   totalFail.incrementAndGet();
+        if ("SUCCESS".equals(status))      totalSuccess.incrementAndGet();
+        else if ("FAIL".equals(status))    totalFail.incrementAndGet();
         else if ("TIMEOUT".equals(status)) totalTimeout.incrementAndGet();
     }
 
@@ -89,14 +89,22 @@ public class MetricsCollector {
         public long successCount;
         public long failCount;
         public long timeoutCount;
+        public long dedupHit;
+        public double dedupHitRate;
     }
 
     public Summary getSummary() {
         long requests = totalRequests.get();
+        long dedupHit = totalDedupHit.get();
+        long totalAttempts = requests + dedupHit;
 
         Summary summary = new Summary();
 
-        if (requests == 0) return summary;
+        if (requests == 0) {
+            summary.dedupHit = dedupHit;
+            summary.dedupHitRate = totalAttempts == 0 ? 0 : (double) dedupHit / totalAttempts * 100.0;
+            return summary;
+        }
 
         summary.avg = totalWriteTime.get() / requests;
         summary.max = maxWriteTime.get();
@@ -110,6 +118,8 @@ public class MetricsCollector {
         summary.timeoutCount = totalTimeout.get();
         long errors = summary.failCount + summary.timeoutCount;
         summary.errorRate = (double) errors / requests * 100.0;
+        summary.dedupHit = dedupHit;
+        summary.dedupHitRate = totalAttempts == 0 ? 0 : (double) dedupHit / totalAttempts * 100.0;
 
         return summary;
     }
@@ -127,7 +137,7 @@ public class MetricsCollector {
         System.out.printf("에러율: %.1f%%%n", s.errorRate);
         System.out.printf("결과 분포: SUCCESS=%d, FAIL=%d, TIMEOUT=%d%n",
                 s.successCount, s.failCount, s.timeoutCount);
-        System.out.println("idempotency 차단: " + totalIdempotencyHit.get());
+        System.out.printf("dedup 차단: %d (차단율 %.1f%%)%n", s.dedupHit, s.dedupHitRate);
     }
 
     private long calculatePercentile(double percentile) {
@@ -141,8 +151,8 @@ public class MetricsCollector {
 
         Collections.sort(copy);
 
-        int index = (int) Math.ceil(percentile * copy.size()) -1;
-        index = Math.max(0, Math.min(index, copy.size() -1));
+        int index = (int) Math.ceil(percentile * copy.size()) - 1;
+        index = Math.max(0, Math.min(index, copy.size() - 1));
 
         return copy.get(index);
     }
@@ -153,7 +163,7 @@ public class MetricsCollector {
 
         try (FileWriter writer = new FileWriter(fileName, true)) {
             writer.write(String.format(
-                "%s,%s,%d,%d,%d,%d,%d,%.2f,%d,%.1f,%.1f\n",
+                "%s,%s,%d,%d,%d,%d,%d,%.2f,%d,%.1f,%.1f,%d,%.1f\n",
                 strategy,
                 scenario,
                 threadCount,
@@ -164,7 +174,9 @@ public class MetricsCollector {
                 s.avgRetry,
                 s.totalConflict,
                 s.tps,
-                s.errorRate
+                s.errorRate,
+                s.dedupHit,
+                s.dedupHitRate
             ));
         } catch (IOException e) {
             throw new RuntimeException(e);

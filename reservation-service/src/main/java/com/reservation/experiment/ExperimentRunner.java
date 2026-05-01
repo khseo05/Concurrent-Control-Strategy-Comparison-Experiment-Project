@@ -33,14 +33,23 @@ public class ExperimentRunner implements CommandLineRunner {
 
     record Scenario(String name, String resultType, int delayMs, boolean withDuplicates) {}
 
+    record DedupScenario(String name, int poolSize, int threadCount) {}
+
     private static final List<Scenario> SCENARIOS = List.of(
-        new Scenario("success",              "SUCCESS", 100,  false),
-        new Scenario("fail",                 "FAIL",    100,  false),
-        new Scenario("timeout",              "TIMEOUT", 1500, false),
-        new Scenario("success+idempotency",  "SUCCESS", 100,  true)
+        new Scenario("success",             "SUCCESS", 100,  false),
+        new Scenario("fail",                "FAIL",    100,  false),
+        new Scenario("timeout",             "TIMEOUT", 1500, false),
+        new Scenario("success+idempotency", "SUCCESS", 100,  true)
     );
 
     private static final int[] THREAD_COUNTS = {50, 100, 200};
+
+    private static final List<DedupScenario> DEDUP_SCENARIOS = List.of(
+        new DedupScenario("dedup_unique", 200, 200),  // 중복 0%
+        new DedupScenario("dedup_mixed",  100, 200),  // 중복 50%
+        new DedupScenario("dedup_high",    50, 200),  // 중복 75%
+        new DedupScenario("dedup_burst",    1, 200)   // 중복 99.5%
+    );
 
     @Override
     public void run(String... args) throws Exception {
@@ -57,6 +66,8 @@ public class ExperimentRunner implements CommandLineRunner {
                 }
             }
         }
+
+        runDedupExperiment();
     }
 
     private void runOne(String strategyName, ReservationStrategy strategy,
@@ -105,5 +116,55 @@ public class ExperimentRunner implements CommandLineRunner {
 
         metricsCollector.printSummary();
         metricsCollector.exportCsv("metrics.csv", strategyName, scenario.name(), threadCount);
+    }
+
+    private void runDedupExperiment() throws Exception {
+
+        System.out.println("\n=== [Redis Dedup 실험] ===");
+
+        for (DedupScenario scenario : DEDUP_SCENARIOS) {
+
+            System.out.printf("%n=== [dedup] [%s] threads=%d pool=%d ===%n",
+                    scenario.name(), scenario.threadCount(), scenario.poolSize());
+
+            metricsCollector.reset();
+            concertRepository.deleteAll();
+            Concert concert = concertRepository.save(new Concert(1000));
+            Long concertId = concert.getId();
+
+            List<String> requestIds = new ArrayList<>(scenario.poolSize());
+            for (int i = 0; i < scenario.poolSize(); i++) {
+                requestIds.add(UUID.randomUUID().toString());
+            }
+
+            ExecutorService executor = Executors.newFixedThreadPool(scenario.threadCount());
+            CountDownLatch readyLatch = new CountDownLatch(scenario.threadCount());
+            CountDownLatch startLatch = new CountDownLatch(1);
+            CountDownLatch doneLatch  = new CountDownLatch(scenario.threadCount());
+
+            for (int i = 0; i < scenario.threadCount(); i++) {
+                String requestId = requestIds.get(i % scenario.poolSize());
+                executor.submit(() -> {
+                    try {
+                        readyLatch.countDown();
+                        startLatch.await();
+                        reservationService.reserve(requestId, concertId, "SUCCESS", 100, stateBasedService);
+                    } catch (InterruptedException ignored) {
+                    } finally {
+                        doneLatch.countDown();
+                    }
+                });
+            }
+
+            readyLatch.await();
+            long startTime = System.currentTimeMillis();
+            startLatch.countDown();
+            doneLatch.await();
+            metricsCollector.setExperimentDuration(System.currentTimeMillis() - startTime);
+            executor.shutdown();
+
+            metricsCollector.printSummary();
+            metricsCollector.exportCsv("metrics.csv", "stateBased", scenario.name(), scenario.threadCount());
+        }
     }
 }
