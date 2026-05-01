@@ -36,7 +36,7 @@ public class ReservationService {
 
         // 중복 요청 차단 레이어
         if (!dedupService.tryAcquire(key, "1", 5L)) {
-            metricsCollector.recordIdempotencyHit();
+            metricsCollector.recordDedupHit();
             return;
         }
 
