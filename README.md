@@ -13,7 +13,7 @@
 
 ```
 레이어 1 (완성)  — DB 락 전략       : 정합성 보장
-레이어 2 (진행중) — Redis dedup     : 중복 요청 차단
+레이어 2 (완성)  — Redis dedup     : 중복 요청 차단
 레이어 3 (예정)  — Circuit Breaker  : 외부 장애 격리
 ```
 
@@ -87,27 +87,56 @@
 
 ---
 
-## 레이어 2 — Redis dedup (진행중)
+## 레이어 2 — Redis dedup (완성)
 
 ### 문제 정의
-success+idempotency 시나리오를 실험하면서 중복 요청이 서비스 레이어까지 도달한 뒤
-IdempotencyStore에서 차단되는 구조임을 확인했다.
+success+idempotency 시나리오에서 중복 요청이 서비스 레이어까지 도달한 뒤 차단되는 구조임을 확인했다.
 
 더 앞단에서 차단할 수 없을까?
 
-현재 흐름:
+기존 흐름:
 ```
-중복 요청 → 서비스 레이어 도달 → IdempotencyStore에서 차단
+중복 요청 → 서비스 레이어 도달 → IdempotencyStore(ConcurrentHashMap)에서 차단
 ```
 
 Redis dedup 적용 후:
 ```
-중복 요청 → Redis에서 차단 → 서비스 레이어에 도달하지 않음
+중복 요청 → Redis SET NX EX → 차단 → 서비스 레이어에 도달하지 않음
 ```
 
-### 실험 계획
-- 트래픽 패턴: burst / steady / mixed
-- 추가 지표: dedup hit ratio, DB 도달 요청 수, TPS 전후 비교
+### 구현
+- `ReservationDedupService`: `StringRedisTemplate.setIfAbsent(key, value, ttl, SECONDS)` — 원자적 SET NX EX
+- key: `requestId:concertId`, TTL: 30초
+- 차단된 요청은 DB 트랜잭션 없이 즉시 반환
+
+### 실험 시나리오
+| 시나리오 | poolSize | threads | 중복 비율 |
+|---|---|---|---|
+| dedup_unique | 200 | 200 | 0% |
+| dedup_mixed | 100 | 200 | 50% |
+| dedup_high | 50 | 200 | 75% |
+| dedup_burst | 1 | 200 | 99.5% |
+
+### 실험 결과
+
+#### DB 도달 vs Redis 차단
+![dedup_db_vs_blocked](https://raw.githubusercontent.com/khseo05/ReserveLab/main/reservation-service/charts/dedup_db_vs_blocked.png)
+
+#### 중복 비율별 TPS
+![dedup_tps](https://raw.githubusercontent.com/khseo05/ReserveLab/main/reservation-service/charts/dedup_tps.png)
+
+#### DB 부하 감소 효과
+![dedup_db_load_reduction](https://raw.githubusercontent.com/khseo05/ReserveLab/main/reservation-service/charts/dedup_db_load_reduction.png)
+
+### 핵심 발견
+1. dedup_burst: 200개 요청 중 199개가 Redis에서 차단, DB 도달 1개
+2. 중복 비율이 높을수록 DB 부하가 선형으로 감소
+3. Redis dedup은 DB 트랜잭션 없이 동작하므로 DB 부하 감소 효과가 즉각적
+4. **그러나 외부 게이트웨이 장애 시 쓰레드 점유로 TPS가 급락한다** → 레이어 3 추가 배경
+
+### 결론
+Redis SET NX EX는 원자적으로 동작하므로 별도의 분산 락 없이 중복 요청을 차단할 수 있다.
+차단 위치를 DB 레이어에서 애플리케이션 레이어 앞단으로 끌어올리는 것만으로 DB 부하가 구조적으로 감소한다.
 
 ---
 
@@ -144,6 +173,7 @@ Circuit Breaker로 장애를 빠르게 감지하고 이후 요청을 즉시 실�
 ExperimentRunner (전략 × 시나리오 × 스레드 수 자동 루프)
    ↓
 ReservationService
+   ├─ ReservationDedupService (Redis SET NX EX — 중복 요청 차단)
    ├─ Tx1: ReservationStrategy (Optimistic / Pessimistic / State-Based)
    ├─ 외부 호출: mock-gateway-server (SUCCESS / FAIL / TIMEOUT)
    └─ Tx2: ReservationTxService.applyResult (상태 전이 + 좌석 복구)
@@ -155,7 +185,7 @@ ExecutionContext (ThreadLocal)
    ↓
 MetricsCollector
    ↓
-avg / P95 / P99 / TPS / 에러율 / 상태 분포
+avg / P95 / P99 / TPS / 에러율 / 상태 분포 / dedup 차단율
    ↓
 CSV 출력
 ```
