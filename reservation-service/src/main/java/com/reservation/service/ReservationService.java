@@ -3,10 +3,10 @@ package com.reservation.service;
 import com.reservation.domain.Reservation;
 import com.reservation.gateway.GatewayClient;
 import com.reservation.service.strategy.ReservationStrategy;
+import com.reservation.service.ReservationDedupService;
 import com.reservation.observability.ExecutionContext;
 import com.reservation.observability.ExecutionContextHolder;
 import com.reservation.observability.MetricsCollector;
-import com.reservation.observability.IdempotencyStore;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -20,7 +20,7 @@ public class ReservationService {
     private final ReservationStrategy strategy;
     private final GatewayClient gatewayClient;
     private final MetricsCollector metricsCollector;
-    private final IdempotencyStore idempotencyStore;
+    private final ReservationDedupService dedupService;
 
     public void reserve(Long concertId, String resultType, int delayMs) {
         reserve(concertId, resultType, delayMs, strategy);
@@ -34,7 +34,8 @@ public class ReservationService {
 
         String key = requestId + ":" + concertId;
 
-        if (!idempotencyStore.saveIfAbsent(key, "IN_PROGRESS")) {
+        // 중복 요청 차단 레이어
+        if (!dedupService.tryAcquire(key, "1", 5L)) {
             metricsCollector.recordIdempotencyHit();
             return;
         }
@@ -61,7 +62,6 @@ public class ReservationService {
             // 3. Tx2
             txService.applyResult(reservation.getId(), result);
 
-            idempotencyStore.saveIfAbsent(key, result);
             context.setStatus(result);
         } finally {
             context.setEndTime(System.currentTimeMillis());
