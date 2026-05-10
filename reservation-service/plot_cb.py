@@ -1,0 +1,140 @@
+import pandas as pd
+import matplotlib.pyplot as plt
+import matplotlib.ticker as ticker
+import numpy as np
+import os
+
+os.makedirs("charts", exist_ok=True)
+
+COLS = ["strategy", "scenario", "threads", "avg_ns", "p95_ns", "p99_ns",
+        "max_ns", "avg_retry", "conflict", "tps", "error_rate", "dedup_hit", "dedup_hit_rate",
+        "cb_blocked", "cb_blocked_rate"]
+
+rows = []
+with open("metrics.csv") as f:
+    for line in f:
+        parts = line.strip().split(",")
+        if len(parts) == 15:
+            rows.append(dict(zip(COLS, parts)))
+
+df = pd.DataFrame(rows)
+for col in ["threads", "tps", "error_rate", "cb_blocked", "cb_blocked_rate"]:
+    df[col] = pd.to_numeric(df[col])
+
+df = df.drop_duplicates(subset=["strategy", "scenario", "threads"], keep="last")
+cb_df = df[df["scenario"].str.startswith("cb_")].copy()
+
+scenario_order = ["cb_normal", "cb_failure", "cb_blocked"]
+cb_df["scenario"] = pd.Categorical(cb_df["scenario"], categories=scenario_order, ordered=True)
+cb_df = cb_df.sort_values("scenario")
+
+labels = ["cb_normal\n(Healthy)", "cb_failure\n(Fault→CB OPEN)", "cb_blocked\n(CB OPEN State)"]
+x = np.arange(len(labels))
+width = 0.5
+colors = ["#4C9BE8", "#E87C4C", "#9B4CE8"]
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 차트 1: TPS 비교
+# ─────────────────────────────────────────────────────────────────────────────
+fig, ax = plt.subplots(figsize=(8, 5))
+bars = ax.bar(x, cb_df["tps"].values, width, color=colors)
+for bar, tps in zip(bars, cb_df["tps"].values):
+    ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 20,
+            f"{tps:.1f}", ha="center", va="bottom", fontsize=11, fontweight="bold")
+
+ax.set_xticks(x)
+ax.set_xticklabels(labels)
+ax.set_ylabel("TPS (req/s)")
+ax.set_title("Circuit Breaker: TPS Comparison")
+ax.set_ylim(0, max(cb_df["tps"].values) * 1.2)
+ax.yaxis.set_major_locator(ticker.MultipleLocator(200))
+ax.grid(True, axis="y", alpha=0.3)
+plt.tight_layout()
+plt.savefig("charts/cb_tps.png", dpi=150)
+plt.close()
+print("saved: charts/cb_tps.png")
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 차트 2: cb_blocked 시나리오 - CB 차단 vs 통과 (stacked bar)
+# ─────────────────────────────────────────────────────────────────────────────
+blocked_row = cb_df[cb_df["scenario"] == "cb_blocked"].iloc[0]
+total = int(blocked_row["threads"])
+cb_hit = int(blocked_row["cb_blocked"])
+passed = total - cb_hit
+
+fig, ax = plt.subplots(figsize=(5, 5))
+ax.bar([0], [passed], width=0.4, label="Gateway Reached", color="#4C9BE8")
+ax.bar([0], [cb_hit], width=0.4, bottom=[passed], label="CB Blocked", color="#E87C4C")
+
+ax.text(0, passed / 2, str(passed), ha="center", va="center",
+        fontsize=13, color="white", fontweight="bold")
+ax.text(0, passed + cb_hit / 2, str(cb_hit), ha="center", va="center",
+        fontsize=13, color="white", fontweight="bold")
+
+ax.set_xticks([0])
+ax.set_xticklabels(["cb_blocked\n(CB OPEN, threads=100)"])
+ax.set_ylabel("Request Count")
+ax.set_title("Circuit Breaker: Gateway Reached vs Blocked")
+ax.set_ylim(0, total * 1.15)
+ax.legend()
+plt.tight_layout()
+plt.savefig("charts/cb_blocked_dist.png", dpi=150)
+plt.close()
+print("saved: charts/cb_blocked_dist.png")
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 차트 3: 에러율 비교
+# ─────────────────────────────────────────────────────────────────────────────
+fig, ax = plt.subplots(figsize=(8, 5))
+bars = ax.bar(x, cb_df["error_rate"].values, width, color=colors)
+for bar, rate in zip(bars, cb_df["error_rate"].values):
+    ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 1,
+            f"{rate:.1f}%", ha="center", va="bottom", fontsize=11, fontweight="bold")
+
+ax.set_xticks(x)
+ax.set_xticklabels(labels)
+ax.set_ylabel("Error Rate (%)")
+ax.set_title("Circuit Breaker: Error Rate Comparison")
+ax.set_ylim(0, 100)
+ax.yaxis.set_major_locator(ticker.MultipleLocator(20))
+ax.grid(True, axis="y", alpha=0.3)
+plt.tight_layout()
+plt.savefig("charts/cb_error_rate.png", dpi=150)
+plt.close()
+print("saved: charts/cb_error_rate.png")
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 차트 4: TPS + 에러율 듀얼 축 (종합 요약)
+# ─────────────────────────────────────────────────────────────────────────────
+fig, ax1 = plt.subplots(figsize=(9, 5))
+ax2 = ax1.twinx()
+
+bars = ax1.bar(x - 0.15, cb_df["tps"].values, width=0.3, color=colors, alpha=0.85, label="TPS")
+ax2.plot(x, cb_df["error_rate"].values, "D--", color="#333333", linewidth=2,
+         markersize=8, label="Error Rate (%)")
+
+for bar, tps in zip(bars, cb_df["tps"].values):
+    ax1.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 20,
+             f"{tps:.0f}", ha="center", va="bottom", fontsize=9, fontweight="bold")
+
+for xi, rate in zip(x, cb_df["error_rate"].values):
+    ax2.text(xi + 0.05, rate + 2, f"{rate:.0f}%", ha="left", va="bottom", fontsize=9, color="#333333")
+
+ax1.set_xticks(x)
+ax1.set_xticklabels(labels)
+ax1.set_ylabel("TPS (req/s)", color="#4C9BE8")
+ax2.set_ylabel("Error Rate (%)", color="#333333")
+ax1.set_title("Circuit Breaker: TPS vs Error Rate Summary")
+ax1.set_ylim(0, max(cb_df["tps"].values) * 1.25)
+ax2.set_ylim(0, 110)
+
+lines1, lbls1 = ax1.get_legend_handles_labels()
+lines2, lbls2 = ax2.get_legend_handles_labels()
+ax1.legend(lines1 + lines2, lbls1 + lbls2, loc="upper left")
+
+plt.tight_layout()
+plt.savefig("charts/cb_summary.png", dpi=150)
+plt.close()
+print("saved: charts/cb_summary.png")
+
+print("\nDone. Check charts/ folder.")

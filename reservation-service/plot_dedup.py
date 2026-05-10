@@ -6,21 +6,29 @@ import os
 
 os.makedirs("charts", exist_ok=True)
 
-COLS_13 = ["strategy", "scenario", "threads", "avg_ns", "p95_ns", "p99_ns",
-           "max_ns", "avg_retry", "conflict", "tps", "error_rate", "dedup_hit", "dedup_hit_rate"]
-COLS_11 = ["strategy", "scenario", "threads", "avg_ns", "p95_ns", "p99_ns",
-           "max_ns", "avg_retry", "conflict", "tps", "error_rate"]
+COLS_15 = ["strategy", "scenario", "threads", "avg_ns", "p95_ns", "p99_ns",
+           "max_ns", "avg_retry", "conflict", "tps", "error_rate", "dedup_hit", "dedup_hit_rate",
+           "cb_blocked", "cb_blocked_rate"]
+COLS_13 = COLS_15[:13]
+COLS_11 = COLS_15[:11]
 
 rows = []
 with open("metrics.csv") as f:
     for line in f:
         parts = line.strip().split(",")
-        if len(parts) == 13:
-            rows.append(dict(zip(COLS_13, parts)))
+        if len(parts) == 15:
+            rows.append(dict(zip(COLS_15, parts)))
+        elif len(parts) == 13:
+            d = dict(zip(COLS_13, parts))
+            d["cb_blocked"] = "0"
+            d["cb_blocked_rate"] = "0.0"
+            rows.append(d)
         elif len(parts) == 11:
             d = dict(zip(COLS_11, parts))
             d["dedup_hit"] = "0"
             d["dedup_hit_rate"] = "0.0"
+            d["cb_blocked"] = "0"
+            d["cb_blocked_rate"] = "0.0"
             rows.append(d)
 
 df = pd.DataFrame(rows)
