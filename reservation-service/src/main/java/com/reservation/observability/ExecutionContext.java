@@ -16,6 +16,7 @@ public class ExecutionContext {
     private String status;
     private String message;
     private String strategyType;
+    private boolean cbBlocked;
 
     public ExecutionContext() {
         this.requestStartTime = System.nanoTime();
@@ -83,5 +84,13 @@ public class ExecutionContext {
 
     public void setStrategyType(String strategyType) {
         this.strategyType = strategyType;
+    }
+
+    public void setCbBlocked(boolean cbBlocked) {
+        this.cbBlocked = cbBlocked;
+    }
+
+    public boolean isCbBlocked() {
+        return cbBlocked;
     }
 }

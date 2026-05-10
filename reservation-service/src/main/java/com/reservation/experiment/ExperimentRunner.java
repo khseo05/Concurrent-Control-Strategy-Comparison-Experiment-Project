@@ -8,6 +8,8 @@ import com.reservation.service.strategy.OptimisticReservationService;
 import com.reservation.service.strategy.PessimisticReservationService;
 import com.reservation.service.strategy.ReservationStrategy;
 import com.reservation.service.strategy.StateBasedReservationService;
+import io.github.resilience4j.circuitbreaker.CircuitBreaker;
+import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.CommandLineRunner;
@@ -30,10 +32,13 @@ public class ExperimentRunner implements CommandLineRunner {
     private final OptimisticReservationService optimisticService;
     private final PessimisticReservationService pessimisticService;
     private final StateBasedReservationService stateBasedService;
+    private final CircuitBreakerRegistry circuitBreakerRegistry;
 
     record Scenario(String name, String resultType, int delayMs, boolean withDuplicates) {}
 
     record DedupScenario(String name, int poolSize, int threadCount) {}
+
+    record CbScenario(String name, String resultType, int delayMs) {}
 
     private static final List<Scenario> SCENARIOS = List.of(
         new Scenario("success",             "SUCCESS", 100,  false),
@@ -43,6 +48,12 @@ public class ExperimentRunner implements CommandLineRunner {
     );
 
     private static final int[] THREAD_COUNTS = {50, 100, 200};
+
+    private static final List<CbScenario> CB_SCENARIOS = List.of(
+        new CbScenario("cb_normal",  "SUCCESS", 100),
+        new CbScenario("cb_failure", "TIMEOUT", 1500),
+        new CbScenario("cb_blocked", "SUCCESS", 100)
+    );
 
     private static final List<DedupScenario> DEDUP_SCENARIOS = List.of(
         new DedupScenario("dedup_unique", 200, 200),  // 중복 0%
@@ -68,6 +79,7 @@ public class ExperimentRunner implements CommandLineRunner {
         }
 
         runDedupExperiment();
+        runCbExperiment();
     }
 
     private void runOne(String strategyName, ReservationStrategy strategy,
@@ -165,6 +177,61 @@ public class ExperimentRunner implements CommandLineRunner {
 
             metricsCollector.printSummary();
             metricsCollector.exportCsv("metrics.csv", "stateBased", scenario.name(), scenario.threadCount());
+        }
+    }
+
+    private void runCbExperiment() throws Exception {
+
+        System.out.println("\n=== [Circuit Breaker 실험] ===");
+
+        CircuitBreaker cb = circuitBreakerRegistry.circuitBreaker("mockGateway");
+        cb.getEventPublisher().onStateTransition(event ->
+            System.out.printf("[CB 상태 전환] %s%n", event.getStateTransition()));
+
+        for (CbScenario scenario : CB_SCENARIOS) {
+
+            if ("cb_blocked".equals(scenario.name())) {
+                cb.transitionToOpenState();
+            } else if (cb.getState() != CircuitBreaker.State.CLOSED) {
+                cb.transitionToClosedState();
+            }
+
+            int threadCount = 100;
+            System.out.printf("%n=== [cb] [%s] threads=%d ===%n", scenario.name(), threadCount);
+
+            metricsCollector.reset();
+            concertRepository.deleteAll();
+            Concert concert = concertRepository.save(new Concert(1000));
+            Long concertId = concert.getId();
+
+            ExecutorService executor = Executors.newFixedThreadPool(threadCount);
+            CountDownLatch readyLatch = new CountDownLatch(threadCount);
+            CountDownLatch startLatch = new CountDownLatch(1);
+            CountDownLatch doneLatch  = new CountDownLatch(threadCount);
+
+            for (int i = 0; i < threadCount; i++) {
+                executor.submit(() -> {
+                    try {
+                        readyLatch.countDown();
+                        startLatch.await();
+                        reservationService.reserve(UUID.randomUUID().toString(), concertId,
+                                scenario.resultType(), scenario.delayMs(), stateBasedService);
+                    } catch (InterruptedException ignored) {
+                    } finally {
+                        doneLatch.countDown();
+                    }
+                });
+            }
+
+            readyLatch.await();
+            long startTime = System.currentTimeMillis();
+            startLatch.countDown();
+            doneLatch.await();
+            metricsCollector.setExperimentDuration(System.currentTimeMillis() - startTime);
+            executor.shutdown();
+
+            metricsCollector.printSummary();
+            metricsCollector.exportCsv("metrics.csv", "stateBased", scenario.name(), threadCount);
         }
     }
 }

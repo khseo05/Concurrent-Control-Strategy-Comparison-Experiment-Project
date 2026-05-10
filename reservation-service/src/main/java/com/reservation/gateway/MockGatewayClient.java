@@ -1,10 +1,13 @@
 package com.reservation.gateway;
 
+import com.reservation.observability.ExecutionContext;
+import com.reservation.observability.ExecutionContextHolder;
+import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestTemplate;
-import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -30,6 +33,11 @@ public class MockGatewayClient implements GatewayClient {
     }
 
     private String fallback(String requestId, String resourceId, String resultType, int delayMs, Exception e) {
+        if (e instanceof CallNotPermittedException) {
+            ExecutionContext ctx = ExecutionContextHolder.get();
+            if (ctx != null) ctx.setCbBlocked(true);
+            return "TIMEOUT";
+        }
         if (e instanceof ResourceAccessException) {
             return "TIMEOUT";
         }

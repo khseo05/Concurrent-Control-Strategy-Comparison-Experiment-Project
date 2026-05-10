@@ -18,6 +18,7 @@ public class MetricsCollector {
     private final AtomicLong totalConflict = new AtomicLong();
     private final AtomicLong totalBlocked = new AtomicLong();
     private final AtomicLong totalDedupHit = new AtomicLong();
+    private final AtomicLong totalCbBlocked = new AtomicLong();
     private final AtomicLong totalSuccess = new AtomicLong();
     private final AtomicLong totalFail = new AtomicLong();
     private final AtomicLong totalTimeout = new AtomicLong();
@@ -32,6 +33,7 @@ public class MetricsCollector {
         totalConflict.set(0);
         totalBlocked.set(0);
         totalDedupHit.set(0);
+        totalCbBlocked.set(0);
         totalSuccess.set(0);
         totalFail.set(0);
         totalTimeout.set(0);
@@ -59,6 +61,7 @@ public class MetricsCollector {
         totalRetry.addAndGet(context.getRetryCount());
         totalConflict.addAndGet(context.getConflictCount());
         totalBlocked.addAndGet(context.getBlockedCount());
+        if (context.isCbBlocked()) totalCbBlocked.incrementAndGet();
 
         String status = context.getStatus();
         if ("SUCCESS".equals(status))      totalSuccess.incrementAndGet();
@@ -91,6 +94,8 @@ public class MetricsCollector {
         public long timeoutCount;
         public long dedupHit;
         public double dedupHitRate;
+        public long cbBlocked;
+        public double cbBlockedRate;
     }
 
     public Summary getSummary() {
@@ -121,6 +126,10 @@ public class MetricsCollector {
         summary.dedupHit = dedupHit;
         summary.dedupHitRate = totalAttempts == 0 ? 0 : (double) dedupHit / totalAttempts * 100.0;
 
+        long cbBlocked = totalCbBlocked.get();
+        summary.cbBlocked = cbBlocked;
+        summary.cbBlockedRate = (double) cbBlocked / requests * 100.0;
+
         return summary;
     }
 
@@ -138,6 +147,7 @@ public class MetricsCollector {
         System.out.printf("결과 분포: SUCCESS=%d, FAIL=%d, TIMEOUT=%d%n",
                 s.successCount, s.failCount, s.timeoutCount);
         System.out.printf("dedup 차단: %d (차단율 %.1f%%)%n", s.dedupHit, s.dedupHitRate);
+        System.out.printf("CB 차단: %d (차단율 %.1f%%)%n", s.cbBlocked, s.cbBlockedRate);
     }
 
     private long calculatePercentile(double percentile) {
@@ -163,7 +173,7 @@ public class MetricsCollector {
 
         try (FileWriter writer = new FileWriter(fileName, true)) {
             writer.write(String.format(
-                "%s,%s,%d,%d,%d,%d,%d,%.2f,%d,%.1f,%.1f,%d,%.1f\n",
+                "%s,%s,%d,%d,%d,%d,%d,%.2f,%d,%.1f,%.1f,%d,%.1f,%d,%.1f\n",
                 strategy,
                 scenario,
                 threadCount,
@@ -176,7 +186,9 @@ public class MetricsCollector {
                 s.tps,
                 s.errorRate,
                 s.dedupHit,
-                s.dedupHitRate
+                s.dedupHitRate,
+                s.cbBlocked,
+                s.cbBlockedRate
             ));
         } catch (IOException e) {
             throw new RuntimeException(e);
