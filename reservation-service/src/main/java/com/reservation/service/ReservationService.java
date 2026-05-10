@@ -35,7 +35,7 @@ public class ReservationService {
         String key = requestId + ":" + concertId;
 
         // 중복 요청 차단 레이어
-        if (!dedupService.tryAcquire(key, "1", 5L)) {
+        if (!dedupService.tryAcquire(key, "1", 3L)) {
             metricsCollector.recordDedupHit();
             return;
         }
