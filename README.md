@@ -4,8 +4,15 @@
 예약 시스템을 실험으로 검증하며 레이어별로 강화해나가는 프로젝트.
 단순한 전략 비교가 아닌, 각 단계에서 문제를 발견하고 해결한 과정을 담았다.
 
-상세 설계 과정 및 실험 분석은 블로그에서 확인할 수 있습니다.
-- [동시성_제어_전략_비교_실험_세부내용](https://velog.io/@kang07/%EB%8F%99%EC%8B%9C%EC%84%B1-%EC%BB%A8%ED%8A%B8%EB%A1%A4-%EC%A0%84%EB%9E%B5-%EB%B9%84%EA%B5%90-%EC%8B%A4%ED%97%98)
+상세 설계 과정 및 실험 분석은 블로그 시리즈에서 확인할 수 있습니다.
+
+| 편 | 제목 |
+|---|---|
+| 1편 | [오버셀링이 왜 발생하는가](https://velog.io/@khseo/%EC%98%A4%EB%B2%84%EC%85%80%EB%A7%81%EC%9D%B4-%EC%99%9C-%EB%B0%9C%EC%83%9D%ED%95%98%EB%8A%94%EA%B0%80) |
+| 2편 | [Optimistic vs Pessimistic - 실험으로 비교한 결과](https://velog.io/@khseo/Optimistic-vs-Pessimistic-%EC%8B%A4%ED%97%98%EC%9C%BC%EB%A1%9C-%EB%B9%84%EA%B5%90%ED%95%9C-%EA%B2%B0%EA%B3%BC) |
+| 3편 | [State-Based 설계 - 락보다 설계가 효과적인 이유](https://velog.io/@khseo/State-Based-%EC%84%A4%EA%B3%84-%EB%9D%BD%EB%B3%B4%EB%8B%A4-%EC%84%A4%EA%B3%84%EA%B0%80-%ED%9A%A8%EA%B3%BC%EC%A0%81%EC%9D%B8-%EC%9D%B4%EC%9C%A0) |
+| 4편 | [Redis dedup - 중복 요청이 DB까지 도달하지 않게 하는 법](https://velog.io/@khseo/%EC%A4%91%EB%B3%B5-%EC%9A%94%EC%B2%AD%EC%9D%B4-DB%EA%B9%8C%EC%A7%80-%EB%8F%84%EB%8B%AC%ED%95%98%EC%A7%80-%EC%95%8A%EA%B2%8C-Redis-dedup%EC%9C%BC%EB%A1%9C-%EB%A0%88%EC%9D%B4%EC%96%B4-%EB%B0%A9%EC%96%B4) |
+| 5편 | [Circuit Breaker - 외부 장애를 시스템에서 격리하는 법](https://velog.io/@khseo/Circuit-Breaker-%EC%99%B8%EB%B6%80-%EC%9E%A5%EC%95%A0%EB%A5%BC-%EC%8B%9C%EC%8A%A4%ED%85%9C%EC%97%90%EC%84%9C-%EA%B2%A9%EB%A6%AC%ED%95%98%EB%8A%94-%EB%B2%95-uusfuq9l) |
 
 ---
 
@@ -14,7 +21,7 @@
 ```
 레이어 1 (완성)  — DB 락 전략       : 정합성 보장
 레이어 2 (완성)  — Redis dedup     : 중복 요청 차단
-레이어 3 (예정)  — Circuit Breaker  : 외부 장애 격리
+레이어 3 (완성)  — Circuit Breaker  : 외부 장애 격리
 ```
 
 각 레이어는 이전 실험에서 발견한 한계를 해결하기 위해 추가되었다.
@@ -120,13 +127,13 @@ Redis dedup 적용 후:
 ### 실험 결과
 
 #### DB 도달 vs Redis 차단
-![dedup_db_vs_blocked](https://raw.githubusercontent.com/khseo05/ReserveLab/main/reservation-service/charts/dedup_db_vs_blocked.png)
+![dedup_db_vs_blocked](https://raw.githubusercontent.com/khseo05/ReserveLab/main/charts/dedup_db_vs_blocked.png)
 
 #### 중복 비율별 TPS
-![dedup_tps](https://raw.githubusercontent.com/khseo05/ReserveLab/main/reservation-service/charts/dedup_tps.png)
+![dedup_tps](https://raw.githubusercontent.com/khseo05/ReserveLab/main/charts/dedup_tps.png)
 
 #### DB 부하 감소 효과
-![dedup_db_load_reduction](https://raw.githubusercontent.com/khseo05/ReserveLab/main/reservation-service/charts/dedup_db_load_reduction.png)
+![dedup_db_load_reduction](https://raw.githubusercontent.com/khseo05/ReserveLab/main/charts/dedup_db_load_reduction.png)
 
 ### 핵심 발견
 1. dedup_burst: 200개 요청 중 199개가 Redis에서 차단, DB 도달 1개
@@ -140,7 +147,7 @@ Redis SET NX EX는 원자적으로 동작하므로 별도의 분산 락 없이 �
 
 ---
 
-## 레이어 3 — Circuit Breaker (예정)
+## 레이어 3 — Circuit Breaker (완성)
 
 ### 문제 정의
 timeout 시나리오 실험에서 TPS가 급락하는 것을 확인했다.
@@ -155,15 +162,43 @@ timeout 시나리오 실험에서 TPS가 급락하는 것을 확인했다.
 
 Circuit Breaker로 장애를 빠르게 감지하고 이후 요청을 즉시 실패 반환하면 어떻게 달라지는가?
 
-#### TPS by Scenario (200 threads)
-![tps_by_scenario](charts/tps_by_scenario.png)
-
 #### success vs timeout TPS 직접 비교
 ![tps_success_vs_timeout](charts/tps_success_vs_timeout.png)
 
-### 실험 계획
-- 재시도 방식 vs Circuit Breaker 비교
-- 추가 지표: TPS, 에러율, 시스템 회복 시간 (OPEN → HALF-OPEN → CLOSED)
+### 구현
+- Resilience4j `@CircuitBreaker(name = "mockGateway", fallbackMethod = "fallback")`
+- `CallNotPermittedException` → CB 차단 지표 기록 후 즉시 반환
+- sliding-window-size: 10 / failure-rate-threshold: 50% / slow-call-duration-threshold: 800ms / wait-duration-in-open-state: 5s
+
+### 실험 시나리오
+| 시나리오 | CB 상태 | resultType | delayMs | 설명 |
+|---|---|---|---|---|
+| cb_normal | CLOSED | SUCCESS | 100ms | 정상 동작 |
+| cb_failure | CLOSED → OPEN | TIMEOUT | 1500ms | 게이트웨이 장애 발생 |
+| cb_blocked | OPEN (강제) | SUCCESS | 100ms | CB 차단 효과만 측정 |
+
+### 실험 결과
+
+#### TPS 비교
+![cb_tps](https://raw.githubusercontent.com/khseo05/ReserveLab/main/charts/cb_tps.png)
+
+#### CB 차단 분포 (cb_blocked)
+![cb_blocked_dist](https://raw.githubusercontent.com/khseo05/ReserveLab/main/charts/cb_blocked_dist.png)
+
+#### 에러율 비교
+![cb_error_rate](https://raw.githubusercontent.com/khseo05/ReserveLab/main/charts/cb_error_rate.png)
+
+#### TPS vs 에러율 종합
+![cb_summary](https://raw.githubusercontent.com/khseo05/ReserveLab/main/charts/cb_summary.png)
+
+### 핵심 발견
+1. 장애 중 TPS 90 → CB OPEN 후 TPS 1667, **약 18.5배 차이**
+2. CB 차단 = fast fail: 응답 시간 1500ms → 수 ms, 쓰레드 점유 없음
+3. slow call threshold가 핵심 — 실패뿐 아니라 느린 응답도 장애로 인식
+
+### 결론
+Circuit Breaker는 장애를 없애지 않는다. 장애가 전체 시스템으로 전파되는 것을 막는다.
+에러율은 그대로지만, 시스템은 살아있다.
 
 ---
 
